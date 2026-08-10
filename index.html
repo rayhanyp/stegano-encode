@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bungkus Pesan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        soft: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            border: '#e2e8f0',
+                        }
+                    },
+                    borderRadius: {
+                        '3xl': '1.5rem',
+                        '4xl': '2rem'
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .fade-enter {
+            opacity: 0;
+            transform: translateY(15px) scale(0.98);
+            animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeUp {
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Karena gambar aslinya berukuran sangat kecil (misal cuma 7x7 piksel), 
+           kita perlu membesarkannya di UI tanpa membuatnya blur */
+        .pixelated-render {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+    </style>
+</head>
+<body class="bg-soft-50 min-h-screen flex flex-col items-center justify-center p-6 font-sans text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Card Utama -->
+    <div class="bg-white max-w-md w-full rounded-4xl p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] fade-enter mb-6 z-10 relative">
+        
+        <div class="text-center mb-8">
+            <h2 class="text-2xl font-bold text-slate-800 tracking-tight mb-2">Bungkus Pesan 🤫</h2>
+            <p class="text-sm text-slate-500 font-medium leading-relaxed">
+                Ketik pesan rahasia kamu, nanti sistem bakal ngubah teksnya jadi matriks gambar biner (hitam-putih).
+            </p>
+        </div>
+
+        <!-- Input Area -->
+        <div class="relative group mb-6">
+            <textarea id="text-input" rows="4" class="w-full bg-slate-50/50 border-2 border-slate-200 rounded-3xl p-5 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all duration-300 resize-none" placeholder="Tulis sesuatu di sini... (contoh: aku mau makan ayam)"></textarea>
+        </div>
+
+        <button id="generate-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-4 px-6 rounded-3xl shadow-lg shadow-indigo-200 transition-all duration-300 transform active:scale-95 flex justify-center items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+            </svg>
+            Generate Gambar
+        </button>
+
+        <!-- Output / Preview Area -->
+        <div id="output-area" class="mt-8 hidden flex-col items-center">
+            <div class="w-full h-[1px] bg-slate-100 mb-8"></div>
+            
+            <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4 block text-center">Preview Piksel</label>
+            
+            <div class="p-3 bg-slate-50 rounded-3xl border border-slate-200/60 shadow-inner mb-6">
+                <!-- Canvas tersembunyi untuk proses, IMG untuk preview -->
+                <canvas id="canvas" class="hidden"></canvas>
+                <img id="image-preview" alt="Pixel Art" class="w-32 h-32 object-cover rounded-2xl pixelated-render border border-slate-200">
+            </div>
+
+            <button id="download-btn" class="text-sm font-semibold text-indigo-500 hover:text-indigo-600 bg-indigo-50 hover:bg-indigo-100 py-3 px-6 rounded-2xl transition-colors duration-300 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Unduh Gambar (.png)
+            </button>
+        </div>
+    </div>
+
+    <!-- Watermark Minimalis -->
+    <div class="fade-enter text-center" style="animation-delay: 0.2s;">
+        <p class="text-[13px] font-medium text-slate-400 tracking-wide">created by yupila</p>
+    </div>
+
+    <script>
+        const textInput = document.getElementById('text-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const outputArea = document.getElementById('output-area');
+        const imagePreview = document.getElementById('image-preview');
+        const downloadBtn = document.getElementById('download-btn');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Fungsi bantu: ubah string jadi biner
+        function stringToBinary(str) {
+            let binary = '';
+            for (let i = 0; i < str.length; i++) {
+                binary += str.charCodeAt(i).toString(2).padStart(8, '0');
+            }
+            return binary;
+        }
+
+        generateBtn.addEventListener('click', () => {
+            const text = textInput.value;
+            
+            if (!text.trim()) {
+                alert("Isi pesannya dulu, dong!");
+                return;
+            }
+
+            // --- Mulai Logika Python yang diubah ke JS ---
+            const key = "###";
+            const binaryKey = stringToBinary(key);
+            const binaryText = stringToBinary(text);
+
+            // Hitung total pixel
+            const pixelsRequired = (binaryKey.length * 2) + binaryText.length;
+            
+            // Hitung ukuran kotak (N x N)
+            const imageSize = Math.ceil(Math.sqrt(pixelsRequired));
+            const totalPixels = imageSize * imageSize;
+
+            // Hitung padding untuk memenuhi matriks (diisi dengan '0')
+            const paddingSize = totalPixels - pixelsRequired;
+            const padding = '0'.repeat(paddingSize);
+
+            // Susunan Array 1D: [Key Pembuka] + [Pesan] + [Padding (0)] + [Key Penutup]
+            const imageBinaryString = binaryKey + binaryText + padding + binaryKey;
+
+            // Siapkan Canvas
+            canvas.width = imageSize;
+            canvas.height = imageSize;
+            
+            // Create ImageData untuk manipulasi warna pixel per pixel
+            const imgData = ctx.createImageData(imageSize, imageSize);
+
+            // Warnai setiap piksel: 1 = Putih (255), 0 = Hitam (0)
+            for (let i = 0; i < imageBinaryString.length; i++) {
+                // biner '1' jadi 255 (putih), '0' jadi 0 (hitam)
+                const colorValue = imageBinaryString[i] === '1' ? 255 : 0; 
+                
+                const dataIndex = i * 4; // Format imgData: R, G, B, A
+                imgData.data[dataIndex] = colorValue;     // Red
+                imgData.data[dataIndex + 1] = colorValue; // Green
+                imgData.data[dataIndex + 2] = colorValue; // Blue
+                imgData.data[dataIndex + 3] = 255;        // Alpha (100% solid)
+            }
+
+            // Terapkan ke Canvas
+            ctx.putImageData(imgData, 0, 0);
+
+            // --- Akhir Logika Python ---
+
+            // Tampilkan ke UI
+            const dataURL = canvas.toDataURL('image/png');
+            imagePreview.src = dataURL;
+            outputArea.classList.remove('hidden');
+            outputArea.classList.add('flex');
+            
+            // Animasi halus kemunculan gambar
+            imagePreview.style.opacity = '0';
+            setTimeout(() => {
+                imagePreview.style.transition = 'opacity 0.5s ease';
+                imagePreview.style.opacity = '1';
+            }, 50);
+        });
+
+        // Logika Unduh Gambar
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'pesan_rahasia.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    </script>
+</body>
+</html>
